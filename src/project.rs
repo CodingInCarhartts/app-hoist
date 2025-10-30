@@ -11,7 +11,7 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     let entry_point = detect_entry_point(path)?;
 
     // Get options based on type
-    let options = get_project_options(&project_type, &entry_point)?;
+    let options = get_project_options(&project_type, &entry_point, path)?;
 
     println!(
         "Detected {} project with {} options",
@@ -39,7 +39,12 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     } else if dry_run {
         println!("Dry run: {} {}", executable, command_args.join(" "));
     } else {
-        execute_project_command(&executable, &command_args, path)?;
+        // Special handling for Go build command
+        if project_type == ProjectType::Go && selected_options.iter().any(|(flag, _)| flag == "build") {
+            execute_go_build_with_install(&executable, &command_args, path)?;
+        } else {
+            execute_project_command(&executable, &command_args, path)?;
+        }
     }
 
     Ok(())
@@ -67,6 +72,30 @@ fn detect_project_type(path: &str) -> anyhow::Result<ProjectType> {
         return Ok(ProjectType::Venv);
     }
 
+    // Check for Go project
+    let go_mod_path = format!("{}/go.mod", path);
+    if std::path::Path::new(&go_mod_path).exists() {
+        return Ok(ProjectType::Go);
+    }
+
+    // Check for Rust project
+    let cargo_toml_path = format!("{}/Cargo.toml", path);
+    if std::path::Path::new(&cargo_toml_path).exists() {
+        return Ok(ProjectType::Rust);
+    }
+
+    // Check for JavaScript/TypeScript project
+    let package_json_path = format!("{}/package.json", path);
+    if std::path::Path::new(&package_json_path).exists() {
+        // Check for TypeScript
+        let tsconfig_path = format!("{}/tsconfig.json", path);
+        if std::path::Path::new(&tsconfig_path).exists() {
+            return Ok(ProjectType::TypeScript);
+        } else {
+            return Ok(ProjectType::JavaScript);
+        }
+    }
+
     // Generic Python project
     if std::path::Path::new(&pyproject_path).exists() {
         return Ok(ProjectType::Generic);
@@ -76,6 +105,35 @@ fn detect_project_type(path: &str) -> anyhow::Result<ProjectType> {
 }
 
 fn detect_entry_point(path: &str) -> anyhow::Result<String> {
+    // Check if this is a Go project
+    let go_mod_path = format!("{}/go.mod", path);
+    if std::path::Path::new(&go_mod_path).exists() {
+        let go_candidates = ["main.go", "cmd/main.go"];
+
+        for candidate in &go_candidates {
+            let full_path = format!("{}/{}", path, candidate);
+            if std::path::Path::new(&full_path).exists() {
+                return Ok(candidate.to_string());
+            }
+        }
+
+        // Default to current directory for Go
+        return Ok(".".to_string());
+    }
+
+    // Check if this is a Rust project
+    let cargo_toml_path = format!("{}/Cargo.toml", path);
+    if std::path::Path::new(&cargo_toml_path).exists() {
+        return Ok(".".to_string());  // Run current directory for Rust
+    }
+
+    // Check if this is a JavaScript/TypeScript project
+    let package_json_path = format!("{}/package.json", path);
+    if std::path::Path::new(&package_json_path).exists() {
+        return Ok(".".to_string());  // Run with package manager
+    }
+
+    // Python project detection
     let candidates = ["app.py", "main.py", "__main__.py"];
 
     for candidate in &candidates {
@@ -92,6 +150,7 @@ fn detect_entry_point(path: &str) -> anyhow::Result<String> {
 fn get_project_options(
     project_type: &ProjectType,
     entry_point: &str,
+    path: &str,
 ) -> anyhow::Result<Vec<OptionInfo>> {
     let mut options = Vec::new();
 
@@ -133,6 +192,93 @@ fn get_project_options(
                 flags: vec!["uninstall".to_string()],
                 description: "Uninstall a package".to_string(),
                 requires_value: true,
+            });
+        }
+        ProjectType::Go => {
+            options.push(OptionInfo {
+                flags: vec!["run".to_string()],
+                description: format!("Run the app ({})", entry_point),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["build".to_string()],
+                description: "Build and install the application".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["test".to_string()],
+                description: "Run tests".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["tidy".to_string()],
+                description: "Clean up dependencies".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["get".to_string()],
+                description: "Add a dependency".to_string(),
+                requires_value: true,
+            });
+        }
+        ProjectType::Rust => {
+            options.push(OptionInfo {
+                flags: vec!["run".to_string()],
+                description: format!("Run the app ({})", entry_point),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["build".to_string()],
+                description: "Build the project".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["install".to_string()],
+                description: "Build and install to ~/.cargo/bin".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["test".to_string()],
+                description: "Run tests".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["check".to_string()],
+                description: "Check code without building".to_string(),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["clippy".to_string()],
+                description: "Run linter".to_string(),
+                requires_value: false,
+            });
+        }
+        ProjectType::JavaScript | ProjectType::TypeScript => {
+            let pm = detect_package_manager(path);
+            options.push(OptionInfo {
+                flags: vec!["run".to_string()],
+                description: format!("Run the app ({} start)", pm),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["install".to_string()],
+                description: format!("Install dependencies ({} install)", pm),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["add".to_string()],
+                description: format!("Add package ({} add)", pm),
+                requires_value: true,
+            });
+            options.push(OptionInfo {
+                flags: vec!["test".to_string()],
+                description: format!("Run tests ({} test)", pm),
+                requires_value: false,
+            });
+            options.push(OptionInfo {
+                flags: vec!["build".to_string()],
+                description: format!("Build project ({} run build)", pm),
+                requires_value: false,
             });
         }
         ProjectType::Generic => {
@@ -193,6 +339,104 @@ fn build_project_command(
             let full_command = format!("source bin/activate && {}", command_parts.join(" && "));
             Ok(("bash".to_string(), vec!["-c".to_string(), full_command]))
         }
+        ProjectType::Go => {
+            let mut args = Vec::new();
+            for (flag, value) in selected {
+                match flag.as_str() {
+                    "run" => {
+                        args.push("run".to_string());
+                        args.push(detect_entry_point(path)?);
+                    }
+                    "build" => {
+                        // For build, we'll handle this specially in execution
+                        args.push("build".to_string());
+                        args.push("-o".to_string());
+                        let binary_name = detect_binary_name(path)?;
+                        let temp_path = format!("/tmp/{}", binary_name);
+                        args.push(temp_path);
+                        args.push(".".to_string());
+                    }
+                    "test" => {
+                        args.push("test".to_string());
+                        args.push("./...".to_string());
+                    }
+                    "tidy" => {
+                        args.push("mod".to_string());
+                        args.push("tidy".to_string());
+                    }
+                    "get" => {
+                        if let Some(pkg) = value {
+                            args.push("get".to_string());
+                            args.push(pkg.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(("go".to_string(), args))
+        }
+        ProjectType::Rust => {
+            let mut args = Vec::new();
+            for (flag, _) in selected {
+                match flag.as_str() {
+                    "run" => {
+                        args.push("run".to_string());
+                        args.push("--bin".to_string());
+                        args.push(detect_rust_binary_name(path)?);
+                    }
+                    "build" => {
+                        args.push("build".to_string());
+                        args.push("--release".to_string());
+                    }
+                    "install" => {
+                        args.push("install".to_string());
+                        args.push("--path".to_string());
+                        args.push(".".to_string());
+                    }
+                    "test" => {
+                        args.push("test".to_string());
+                    }
+                    "check" => {
+                        args.push("check".to_string());
+                    }
+                    "clippy" => {
+                        args.push("clippy".to_string());
+                    }
+                    _ => {}
+                }
+            }
+            Ok(("cargo".to_string(), args))
+        }
+        ProjectType::JavaScript | ProjectType::TypeScript => {
+            let pm = detect_package_manager(path);
+            let mut args = vec![pm];
+
+            for (flag, value) in selected {
+                match flag.as_str() {
+                    "run" => {
+                        args.push("start".to_string());
+                    }
+                    "install" => {
+                        args.push("install".to_string());
+                    }
+                    "add" => {
+                        args.push("add".to_string());
+                        if let Some(pkg) = value {
+                            args.push(pkg.clone());
+                        }
+                    }
+                    "test" => {
+                        args.push("test".to_string());
+                    }
+                    "build" => {
+                        args.push("run".to_string());
+                        args.push("build".to_string());
+                    }
+                    _ => {}
+                }
+            }
+            Ok(("npx".to_string(), args))
+        }
         ProjectType::Generic => {
             let mut args = Vec::new();
             for (flag, _) in selected {
@@ -203,4 +447,127 @@ fn build_project_command(
             Ok(("python".to_string(), args))
         }
     }
+}
+
+fn detect_binary_name(path: &str) -> anyhow::Result<String> {
+    // Try to read from go.mod
+    let go_mod_path = format!("{}/go.mod", path);
+    if let Ok(content) = std::fs::read_to_string(&go_mod_path) {
+        // Parse module name from "module github.com/user/repo"
+        for line in content.lines() {
+            if line.starts_with("module ") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    // Extract repo name from github.com/user/repo
+                    let module_path = parts[1];
+                    if let Some(repo_name) = module_path.split('/').next_back() {
+                        return Ok(repo_name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: use directory name
+    let dir_name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("app");
+
+    Ok(dir_name.to_string())
+}
+
+fn extract_binary_path_from_args(args: &[String]) -> anyhow::Result<String> {
+    // Find the -o flag and get the next argument
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "-o" && i + 1 < args.len() {
+            return Ok(args[i + 1].clone());
+        }
+    }
+    anyhow::bail!("Could not find output path in build arguments");
+}
+
+fn detect_package_manager(path: &str) -> String {
+    // Check for lock files to determine package manager
+    let yarn_lock = format!("{}/yarn.lock", path);
+    let pnpm_lock = format!("{}/pnpm-lock.yaml", path);
+    let _package_lock = format!("{}/package-lock.json", path);
+
+    if std::path::Path::new(&yarn_lock).exists() {
+        "yarn".to_string()
+    } else if std::path::Path::new(&pnpm_lock).exists() {
+        "pnpm".to_string()
+    } else {
+        "npm".to_string()  // default
+    }
+}
+
+fn detect_rust_binary_name(path: &str) -> anyhow::Result<String> {
+    // Parse from Cargo.toml [package] name
+    let cargo_toml_path = format!("{}/Cargo.toml", path);
+    if let Ok(content) = std::fs::read_to_string(&cargo_toml_path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("name = ") {
+                let name_part = trimmed.split_once('=').unwrap().1.trim();
+                let name = name_part.trim_matches('"').trim_matches('\'');
+                return Ok(name.to_string());
+            }
+        }
+    }
+
+    // Fallback to directory name
+    let dir_name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("app");
+
+    Ok(dir_name.to_string())
+}
+
+fn execute_go_build_with_install(executable: &str, args: &[String], path: &str) -> anyhow::Result<()> {
+    use std::process::Command;
+
+    // Step 1: Build the binary
+    println!("Building Go application...");
+    let mut build_cmd = Command::new(executable);
+    build_cmd.args(args).current_dir(path);
+
+    let build_status = build_cmd.status()?;
+    if !build_status.success() {
+        anyhow::bail!("Build failed with exit code: {:?}", build_status.code());
+    }
+
+    // Step 2: Detect the binary path from the build command
+    let binary_path = extract_binary_path_from_args(args)?;
+
+    // Step 3: Determine final installation name
+    let install_name = detect_binary_name(path)?;
+    let install_path = format!("/usr/bin/{}", install_name);
+
+    // Step 4: Check if binary exists before moving
+    if !std::path::Path::new(&binary_path).exists() {
+        anyhow::bail!("Built binary not found at: {}", binary_path);
+    }
+
+    // Step 5: Move to /usr/bin (requires sudo)
+    println!("Installing {} to {}...", install_name, install_path);
+    let install_status = Command::new("sudo")
+        .args(["mv", &binary_path, &install_path])
+        .status()?;
+
+    if !install_status.success() {
+        anyhow::bail!("Installation failed. You may need to run with sudo or check permissions.");
+    }
+
+    // Step 6: Verify installation
+    let which_output = Command::new("which").arg(&install_name).output()?;
+    if which_output.status.success() {
+        println!("✅ Successfully installed {} and added to PATH!", install_name);
+        println!("You can now run: {}", install_name);
+    } else {
+        println!("⚠️  Binary installed but may not be in PATH. Try: export PATH=$PATH:/usr/bin");
+    }
+
+    Ok(())
 }

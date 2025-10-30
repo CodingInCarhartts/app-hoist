@@ -5,11 +5,15 @@ pub struct OptionInfo {
     pub requires_value: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ProjectType {
     Uv,
     Venv,
     Generic,
+    Go,
+    Rust,
+    JavaScript,
+    TypeScript,
 }
 
 impl std::fmt::Display for ProjectType {
@@ -18,6 +22,10 @@ impl std::fmt::Display for ProjectType {
             ProjectType::Uv => write!(f, "UV"),
             ProjectType::Venv => write!(f, "venv"),
             ProjectType::Generic => write!(f, "generic Python"),
+            ProjectType::Go => write!(f, "Go"),
+            ProjectType::Rust => write!(f, "Rust"),
+            ProjectType::JavaScript => write!(f, "JavaScript"),
+            ProjectType::TypeScript => write!(f, "TypeScript"),
         }
     }
 }

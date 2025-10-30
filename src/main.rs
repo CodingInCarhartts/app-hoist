@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
             package::handle_package_mode(package, args.dry_run)?;
         }
         (None, Some(path)) => {
-            // Project mode: manage a Python project
+            // Project mode: manage a project (Python or Go)
             project::handle_project_mode(path, args.dry_run)?;
         }
         (Some(_), Some(_)) => {
