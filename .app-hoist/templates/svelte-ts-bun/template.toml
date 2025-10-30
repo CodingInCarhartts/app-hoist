@@ -1,0 +1,10 @@
+[template]
+name = "svelte-ts-bun"
+description = "SvelteKit app with TypeScript and Bun"
+language = "javascript"
+
+[template.variables]
+project_name = { description = "Name of the project", default = "my-svelte-app" }
+author = { description = "Author name", default = "Your Name" }
+port = { description = "Development server port", default = 3000 }
+use_tailwind = { description = "Include Tailwind CSS", default = false }
