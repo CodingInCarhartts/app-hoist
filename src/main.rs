@@ -20,7 +20,9 @@ fn main() -> anyhow::Result<()> {
             project::handle_project_mode(path, args.dry_run)?;
         }
         (Some(_), Some(_)) => {
-            anyhow::bail!("Cannot specify both --package and --path. Use --package for executables or --path for projects.");
+            anyhow::bail!(
+                "Cannot specify both --package and --path. Use --package for executables or --path for projects."
+            );
         }
         (None, None) => {
             anyhow::bail!("Must specify either --package <name> or --path <directory>");

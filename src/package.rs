@@ -1,5 +1,5 @@
 use crate::models::OptionInfo;
-use crate::utils::{select_options, build_command, execute_command};
+use crate::utils::{build_command, execute_command, select_options};
 use regex::Regex;
 use std::process::Command;
 
@@ -43,9 +43,7 @@ pub fn handle_package_mode(package: &str, dry_run: bool) -> anyhow::Result<()> {
 
 fn find_executable(name: &str) -> anyhow::Result<String> {
     // Try to run 'which' to find the executable
-    let output = Command::new("which")
-        .arg(name)
-        .output()?;
+    let output = Command::new("which").arg(name).output()?;
 
     if output.status.success() {
         let path = String::from_utf8(output.stdout)?.trim().to_string();
@@ -56,9 +54,7 @@ fn find_executable(name: &str) -> anyhow::Result<String> {
 }
 
 fn get_help_output(executable: &str) -> anyhow::Result<String> {
-    let output = Command::new(executable)
-        .arg("--help")
-        .output()?;
+    let output = Command::new(executable).arg("--help").output()?;
 
     if output.status.success() {
         Ok(String::from_utf8(output.stdout)?)
@@ -130,7 +126,9 @@ fn parse_flag_line(line: &str) -> (Vec<String>, bool) {
     // Split by comma to handle multiple flags
     for part in line.split(',') {
         let part = part.trim();
-        if part.is_empty() { continue; }
+        if part.is_empty() {
+            continue;
+        }
 
         // Split by space and take the flag part
         let flag = part.split_whitespace().next().unwrap_or(part);

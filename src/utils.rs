@@ -11,8 +11,7 @@ pub fn select_options(options: &[OptionInfo]) -> anyhow::Result<Vec<(String, Opt
         .collect();
 
     // Use MultiSelect to let user choose options
-    let selected_texts = MultiSelect::new("Select options to include:", option_texts)
-        .prompt()?;
+    let selected_texts = MultiSelect::new("Select options to include:", option_texts).prompt()?;
 
     let mut selected = Vec::new();
 
@@ -20,7 +19,7 @@ pub fn select_options(options: &[OptionInfo]) -> anyhow::Result<Vec<(String, Opt
         // Extract the index from [idx]
         if let Some(start) = text.find('[') {
             if let Some(end) = text.find(']') {
-                if let Ok(idx) = text[start+1..end].parse::<usize>() {
+                if let Ok(idx) = text[start + 1..end].parse::<usize>() {
                     if let Some(opt) = options.get(idx) {
                         let flag = opt.flags[0].clone(); // Use the first flag
 
@@ -71,7 +70,11 @@ pub fn execute_command(executable: &str, args: &[String]) -> anyhow::Result<()> 
     Ok(())
 }
 
-pub fn execute_project_command(executable: &str, args: &[String], path: &str) -> anyhow::Result<()> {
+pub fn execute_project_command(
+    executable: &str,
+    args: &[String],
+    path: &str,
+) -> anyhow::Result<()> {
     println!("Executing: {} {}", executable, args.join(" "));
 
     let mut command = Command::new(executable);

@@ -1,5 +1,5 @@
 use crate::models::{OptionInfo, ProjectType};
-use crate::utils::{select_options, execute_project_command};
+use crate::utils::{execute_project_command, select_options};
 
 pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     println!("Managing project: {}", path);
@@ -13,7 +13,11 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     // Get options based on type
     let options = get_project_options(&project_type, &entry_point)?;
 
-    println!("Detected {} project with {} options", project_type, options.len());
+    println!(
+        "Detected {} project with {} options",
+        project_type,
+        options.len()
+    );
 
     let selected_options = if dry_run {
         println!("Dry run: skipping interactive selection, using no arguments.");
@@ -30,7 +34,9 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     let (executable, command_args) = build_project_command(&project_type, path, &selected_options)?;
 
     // Execute the command
-    if dry_run {
+    if command_args.is_empty() {
+        println!("No command to execute. Select options to perform actions.");
+    } else if dry_run {
         println!("Dry run: {} {}", executable, command_args.join(" "));
     } else {
         execute_project_command(&executable, &command_args, path)?;
@@ -42,12 +48,16 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
 fn detect_project_type(path: &str) -> anyhow::Result<ProjectType> {
     // Check for uv project
     let pyproject_path = format!("{}/pyproject.toml", path);
+    let uv_lock_path = format!("{}/uv.lock", path);
     if std::path::Path::new(&pyproject_path).exists() {
-        // Read pyproject.toml and check for [tool.uv]
-        if let Ok(content) = std::fs::read_to_string(&pyproject_path) {
-            if content.contains("[tool.uv]") {
-                return Ok(ProjectType::Uv);
-            }
+        // Check for [tool.uv] section OR uv.lock file
+        let has_uv_section = std::fs::read_to_string(&pyproject_path)
+            .map(|content| content.contains("[tool.uv]"))
+            .unwrap_or(false);
+        let has_uv_lock = std::path::Path::new(&uv_lock_path).exists();
+
+        if has_uv_section || has_uv_lock {
+            return Ok(ProjectType::Uv);
         }
     }
 
@@ -79,7 +89,10 @@ fn detect_entry_point(path: &str) -> anyhow::Result<String> {
     Ok("app.py".to_string())
 }
 
-fn get_project_options(project_type: &ProjectType, entry_point: &str) -> anyhow::Result<Vec<OptionInfo>> {
+fn get_project_options(
+    project_type: &ProjectType,
+    entry_point: &str,
+) -> anyhow::Result<Vec<OptionInfo>> {
     let mut options = Vec::new();
 
     match project_type {
@@ -134,17 +147,28 @@ fn get_project_options(project_type: &ProjectType, entry_point: &str) -> anyhow:
     Ok(options)
 }
 
-fn build_project_command(project_type: &ProjectType, path: &str, selected: &[(String, Option<String>)]) -> anyhow::Result<(String, Vec<String>)> {
+fn build_project_command(
+    project_type: &ProjectType,
+    path: &str,
+    selected: &[(String, Option<String>)],
+) -> anyhow::Result<(String, Vec<String>)> {
     match project_type {
         ProjectType::Uv => {
-            let mut args = vec!["--project".to_string(), path.to_string()];
-            for (flag, value) in selected {
-                args.push(flag.clone());
-                if let Some(val) = value {
-                    args.push(val.clone());
+            if selected.iter().any(|(flag, _)| flag == "run") {
+                // For run command, use uv run <entry_point>
+                let entry_point = detect_entry_point(path)?;
+                Ok(("uv".to_string(), vec!["run".to_string(), entry_point]))
+            } else {
+                // For other commands (sync, add, etc.), use uv --project <path> <command>
+                let mut args = vec!["--project".to_string(), path.to_string()];
+                for (flag, value) in selected {
+                    args.push(flag.clone());
+                    if let Some(val) = value {
+                        args.push(val.clone());
+                    }
                 }
+                Ok(("uv".to_string(), args))
             }
-            Ok(("uv".to_string(), args))
         }
         ProjectType::Venv => {
             let mut command_parts = Vec::new();
