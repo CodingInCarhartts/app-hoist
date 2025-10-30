@@ -20,13 +20,27 @@ pub struct Args {
     #[arg(long)]
     pub docker_path: Option<String>,
 
-    /// Template operations
+    /// Run operations on multiple projects in parallel
+    #[arg(long)]
+    pub multi_path: Option<Vec<String>>,
+
+    /// Template and cache operations
     #[command(subcommand)]
-    pub template: Option<TemplateCommand>,
+    pub command: Option<AppCommand>,
 
     /// Dry run: show the command without executing
     #[arg(long)]
     pub dry_run: bool,
+}
+
+#[derive(Subcommand)]
+pub enum AppCommand {
+    /// Template operations
+    #[command(subcommand)]
+    Template(TemplateCommand),
+    /// Cache operations
+    #[command(subcommand)]
+    Cache(CacheCommand),
 }
 
 #[derive(Subcommand)]
@@ -53,5 +67,18 @@ pub enum TemplateCommand {
     Search {
         /// Search query
         query: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CacheCommand {
+    /// Show cache statistics
+    Stats,
+    /// Clear all cached data
+    Clear,
+    /// Clear cache for specific path
+    Invalidate {
+        /// Path to invalidate cache for
+        path: String,
     },
 }

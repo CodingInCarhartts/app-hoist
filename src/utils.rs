@@ -1,6 +1,8 @@
 use crate::models::OptionInfo;
+use indicatif::ProgressBar;
 use inquire::{MultiSelect, Text};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use tokio::process::Command as AsyncCommand;
 
 pub fn select_options(options: &[OptionInfo]) -> anyhow::Result<Vec<(String, Option<String>)>> {
     // Create a list of option descriptions for selection
@@ -90,4 +92,30 @@ pub fn execute_project_command(
     }
 
     Ok(())
+}
+
+pub async fn execute_project_command_async(
+    executable: &str,
+    args: &[String],
+    path: &str,
+    pb: &ProgressBar,
+) -> anyhow::Result<()> {
+    pb.set_message(format!("Running: {} {}", executable, args.join(" ")));
+
+    let mut command = AsyncCommand::new(executable);
+    command
+        .args(args)
+        .current_dir(path)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    let status = command.status().await?;
+
+    if status.success() {
+        pb.set_message(format!("✅ Completed: {} {}", executable, args.join(" ")));
+        Ok(())
+    } else {
+        pb.set_message(format!("❌ Failed: {} {} (exit code: {:?})", executable, args.join(" "), status.code()));
+        anyhow::bail!("Command failed with exit code: {:?}", status.code());
+    }
 }

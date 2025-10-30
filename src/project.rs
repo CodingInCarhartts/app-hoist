@@ -1,14 +1,31 @@
+use crate::cache::{CacheManager, ProjectCache};
 use crate::models::{OptionInfo, ProjectType};
 use crate::utils::{execute_project_command, select_options};
 
 pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
     println!("Managing project: {}", path);
 
-    // Detect project type
-    let project_type = detect_project_type(path)?;
+    // Initialize cache manager
+    let mut cache_manager = CacheManager::new()?;
 
-    // Detect entry point
-    let entry_point = detect_entry_point(path)?;
+    // Try to get cached project info
+    let (project_type, entry_point) = if let Some(cached) = cache_manager.get(path)? {
+        println!("Using cached project information");
+        (cached.project_type, cached.entry_point)
+    } else {
+        println!("Detecting project information...");
+        // Detect project type
+        let project_type = detect_project_type(path)?;
+
+        // Detect entry point
+        let entry_point = detect_entry_point(path)?;
+
+        // Cache the results
+        let cache = ProjectCache::new(project_type.clone(), entry_point.clone());
+        cache_manager.set(path.to_string(), cache)?;
+
+        (project_type, entry_point)
+    };
 
     // Get options based on type
     let options = get_project_options(&project_type, &entry_point, path)?;

@@ -5,7 +5,7 @@ pub struct OptionInfo {
     pub requires_value: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ProjectType {
     Uv,
     Venv,
