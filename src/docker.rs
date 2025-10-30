@@ -1,5 +1,5 @@
 use crate::models::OptionInfo;
-use crate::utils::{select_options, execute_project_command};
+use crate::utils::{execute_project_command, select_options};
 use anyhow::anyhow;
 use std::path::Path;
 use std::process::Command;
@@ -23,7 +23,10 @@ pub fn handle_direct_docker_mode(command: &str, dry_run: bool) -> anyhow::Result
 
     let status = docker_cmd.status()?;
     if !status.success() {
-        return Err(anyhow!("Docker command failed with exit code: {:?}", status.code()));
+        return Err(anyhow!(
+            "Docker command failed with exit code: {:?}",
+            status.code()
+        ));
     }
 
     Ok(())
@@ -38,7 +41,11 @@ pub fn handle_docker_project_mode(path: &str, dry_run: bool) -> anyhow::Result<(
     // Get options based on context
     let options = get_docker_options(&context)?;
 
-    println!("Detected {} Docker setup with {} options", context, options.len());
+    println!(
+        "Detected {} Docker setup with {} options",
+        context,
+        options.len()
+    );
 
     let selected_options = if dry_run {
         println!("Dry run: skipping interactive selection, using no arguments.");
@@ -92,7 +99,10 @@ fn detect_docker_context(path: &str) -> anyhow::Result<DockerContext> {
         (true, true) => Ok(DockerContext::Hybrid),
         (true, false) => Ok(DockerContext::SingleImage),
         (false, true) => Ok(DockerContext::Compose),
-        (false, false) => Err(anyhow!("No Dockerfile or docker-compose.yml found in {}", path)),
+        (false, false) => Err(anyhow!(
+            "No Dockerfile or docker-compose.yml found in {}",
+            path
+        )),
     }
 }
 
@@ -179,35 +189,78 @@ fn build_docker_command(
         DockerContext::SingleImage => {
             let image_name = generate_image_name(path);
             match flag {
-                "build" => Ok(("docker".to_string(), vec!["build".to_string(), "-t".to_string(), image_name, ".".to_string()])),
-                "run" => Ok(("docker".to_string(), vec!["run".to_string(), "-it".to_string(), "--rm".to_string(), image_name])),
-                "shell" => Ok(("docker".to_string(), vec!["run".to_string(), "-it".to_string(), "--rm".to_string(), image_name, "/bin/bash".to_string()])),
+                "build" => Ok((
+                    "docker".to_string(),
+                    vec![
+                        "build".to_string(),
+                        "-t".to_string(),
+                        image_name,
+                        ".".to_string(),
+                    ],
+                )),
+                "run" => Ok((
+                    "docker".to_string(),
+                    vec![
+                        "run".to_string(),
+                        "-it".to_string(),
+                        "--rm".to_string(),
+                        image_name,
+                    ],
+                )),
+                "shell" => Ok((
+                    "docker".to_string(),
+                    vec![
+                        "run".to_string(),
+                        "-it".to_string(),
+                        "--rm".to_string(),
+                        image_name,
+                        "/bin/bash".to_string(),
+                    ],
+                )),
                 "logs" => {
                     // For logs, we need to find the running container
                     // This is a simplified version - in practice you'd need to track container names
-                    Ok(("docker".to_string(), vec!["ps".to_string(), "-f".to_string(), format!("ancestor={}", image_name)]))
+                    Ok((
+                        "docker".to_string(),
+                        vec![
+                            "ps".to_string(),
+                            "-f".to_string(),
+                            format!("ancestor={}", image_name),
+                        ],
+                    ))
                 }
                 "push" => Ok(("docker".to_string(), vec!["push".to_string(), image_name])),
                 "pull" => Ok(("docker".to_string(), vec!["pull".to_string(), image_name])),
                 _ => Err(anyhow!("Unknown Docker command: {}", flag)),
             }
         }
-        DockerContext::Compose => {
-            match flag {
-                "up" => Ok(("docker-compose".to_string(), vec!["up".to_string(), "-d".to_string()])),
-                "down" => Ok(("docker-compose".to_string(), vec!["down".to_string()])),
-                "build" => Ok(("docker-compose".to_string(), vec!["build".to_string()])),
-                "logs" => Ok(("docker-compose".to_string(), vec!["logs".to_string(), "-f".to_string()])),
-                "shell" => {
-                    if let Some(service) = value {
-                        Ok(("docker-compose".to_string(), vec!["exec".to_string(), service.to_string(), "/bin/bash".to_string()]))
-                    } else {
-                        Err(anyhow!("Service name required for shell command"))
-                    }
+        DockerContext::Compose => match flag {
+            "up" => Ok((
+                "docker-compose".to_string(),
+                vec!["up".to_string(), "-d".to_string()],
+            )),
+            "down" => Ok(("docker-compose".to_string(), vec!["down".to_string()])),
+            "build" => Ok(("docker-compose".to_string(), vec!["build".to_string()])),
+            "logs" => Ok((
+                "docker-compose".to_string(),
+                vec!["logs".to_string(), "-f".to_string()],
+            )),
+            "shell" => {
+                if let Some(service) = value {
+                    Ok((
+                        "docker-compose".to_string(),
+                        vec![
+                            "exec".to_string(),
+                            service.to_string(),
+                            "/bin/bash".to_string(),
+                        ],
+                    ))
+                } else {
+                    Err(anyhow!("Service name required for shell command"))
                 }
-                _ => Err(anyhow!("Unknown Docker Compose command: {}", flag)),
             }
-        }
+            _ => Err(anyhow!("Unknown Docker Compose command: {}", flag)),
+        },
         DockerContext::Hybrid => {
             // For hybrid, try compose first, then fall back to single image
             if matches!(flag, "up" | "down" | "build" | "logs" | "shell") {

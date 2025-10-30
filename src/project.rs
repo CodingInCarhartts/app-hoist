@@ -1,5 +1,5 @@
 use crate::cache::{CacheManager, ProjectCache};
-use crate::models::{OptionInfo, ProjectType};
+use crate::models::{CliArg, OptionInfo, ProjectType};
 use crate::utils::{execute_project_command, select_options};
 
 pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
@@ -57,7 +57,9 @@ pub fn handle_project_mode(path: &str, dry_run: bool) -> anyhow::Result<()> {
         println!("Dry run: {} {}", executable, command_args.join(" "));
     } else {
         // Special handling for Go build command
-        if project_type == ProjectType::Go && selected_options.iter().any(|(flag, _)| flag == "build") {
+        if project_type == ProjectType::Go
+            && selected_options.iter().any(|(flag, _)| flag == "build")
+        {
             execute_go_build_with_install(&executable, &command_args, path)?;
         } else {
             execute_project_command(&executable, &command_args, path)?;
@@ -141,13 +143,13 @@ fn detect_entry_point(path: &str) -> anyhow::Result<String> {
     // Check if this is a Rust project
     let cargo_toml_path = format!("{}/Cargo.toml", path);
     if std::path::Path::new(&cargo_toml_path).exists() {
-        return Ok(".".to_string());  // Run current directory for Rust
+        return Ok(".".to_string()); // Run current directory for Rust
     }
 
     // Check if this is a JavaScript/TypeScript project
     let package_json_path = format!("{}/package.json", path);
     if std::path::Path::new(&package_json_path).exists() {
-        return Ok(".".to_string());  // Run with package manager
+        return Ok(".".to_string()); // Run with package manager
     }
 
     // Python project detection
@@ -274,9 +276,21 @@ fn get_project_options(
             let pm = detect_package_manager(path);
             options.push(OptionInfo {
                 flags: vec!["run".to_string()],
-                description: format!("Run the app ({} start)", pm),
+                description: format!("Run the app ({})", entry_point),
                 requires_value: false,
             });
+
+            // Add detected CLI args as separate options
+            let cli_args = detect_cli_args(path);
+            for arg in cli_args {
+                if let Some(long) = &arg.long {
+                    options.push(OptionInfo {
+                        flags: vec![format!("run --{}", long)],
+                        description: format!("Run with --{} argument", long),
+                        requires_value: arg.requires_value,
+                    });
+                }
+            }
             options.push(OptionInfo {
                 flags: vec!["install".to_string()],
                 description: format!("Install dependencies ({} install)", pm),
@@ -394,7 +408,7 @@ fn build_project_command(
         }
         ProjectType::Rust => {
             let mut args = Vec::new();
-            for (flag, _) in selected {
+            for (flag, value) in selected {
                 match flag.as_str() {
                     "run" => {
                         args.push("run".to_string());
@@ -419,7 +433,18 @@ fn build_project_command(
                     "clippy" => {
                         args.push("clippy".to_string());
                     }
-                    _ => {}
+                    _ => {
+                        if flag.starts_with("run --") {
+                            let arg_name = &flag[6..];
+                            args.push("run".to_string());
+                            args.push("--bin".to_string());
+                            args.push(detect_rust_binary_name(path)?);
+                            args.push(format!("--{}", arg_name));
+                            if let Some(val) = value {
+                                args.push(val.to_string());
+                            }
+                        }
+                    }
                 }
             }
             Ok(("cargo".to_string(), args))
@@ -515,7 +540,7 @@ fn detect_package_manager(path: &str) -> String {
     } else if std::path::Path::new(&pnpm_lock).exists() {
         "pnpm".to_string()
     } else {
-        "npm".to_string()  // default
+        "npm".to_string() // default
     }
 }
 
@@ -542,7 +567,81 @@ fn detect_rust_binary_name(path: &str) -> anyhow::Result<String> {
     Ok(dir_name.to_string())
 }
 
-fn execute_go_build_with_install(executable: &str, args: &[String], path: &str) -> anyhow::Result<()> {
+fn detect_cli_args(path: &str) -> Vec<CliArg> {
+    let main_rs_path = format!("{}/src/main.rs", path);
+    let mut args = Vec::new();
+
+    if let Ok(content) = std::fs::read_to_string(&main_rs_path) {
+        if !content.contains("clap::Parser") && !content.contains("derive(Parser)") {
+            return args; // Not using clap
+        }
+
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            let line = lines[i].trim();
+            if line.starts_with("#[arg") {
+                // Parse the arg attribute
+                let mut long = None;
+                let short = None;
+
+                // Simple parse: look for long = "..." or long
+                if line.contains("long") {
+                    if let Some(start) = line.find("long = \"") {
+                        if let Some(end) = line[start + 8..].find('"') {
+                            long = Some(line[start + 8..start + 8 + end].to_string());
+                        }
+                    } else if line.contains("long)") || line == "#[arg(long)]" {
+                        // Next field name
+                    }
+                }
+
+                // Find the field name
+                i += 1;
+                while i < lines.len() {
+                    let field_line = lines[i].trim();
+                    if !field_line.starts_with("//") && !field_line.is_empty() {
+                        if let Some(colon_pos) = field_line.find(':') {
+                            let name = field_line[..colon_pos].trim().to_string();
+                            let type_part = field_line[colon_pos + 1..].trim();
+
+                            // Determine if requires value: if Option<T> or T, assume requires unless bool
+                            let requires_value = !type_part.starts_with("bool");
+
+                            if let Some(l) = long.clone() {
+                                args.push(CliArg {
+                                    name,
+                                    long: Some(l),
+                                    short,
+                                    requires_value,
+                                });
+                            } else {
+                                // Use name as long if no long specified
+                                args.push(CliArg {
+                                    name: name.clone(),
+                                    long: Some(name),
+                                    short,
+                                    requires_value,
+                                });
+                            }
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    args
+}
+
+fn execute_go_build_with_install(
+    executable: &str,
+    args: &[String],
+    path: &str,
+) -> anyhow::Result<()> {
     use std::process::Command;
 
     // Step 1: Build the binary
@@ -580,7 +679,10 @@ fn execute_go_build_with_install(executable: &str, args: &[String], path: &str) 
     // Step 6: Verify installation
     let which_output = Command::new("which").arg(&install_name).output()?;
     if which_output.status.success() {
-        println!("✅ Successfully installed {} and added to PATH!", install_name);
+        println!(
+            "✅ Successfully installed {} and added to PATH!",
+            install_name
+        );
         println!("You can now run: {}", install_name);
     } else {
         println!("⚠️  Binary installed but may not be in PATH. Try: export PATH=$PATH:/usr/bin");

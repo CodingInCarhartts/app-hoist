@@ -5,6 +5,14 @@ pub struct OptionInfo {
     pub requires_value: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct CliArg {
+    pub name: String,
+    pub long: Option<String>,
+    pub short: Option<char>,
+    pub requires_value: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ProjectType {
     Uv,

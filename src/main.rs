@@ -28,7 +28,13 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     } else {
-        match (&args.package, &args.path, &args.docker, &args.docker_path, &args.multi_path) {
+        match (
+            &args.package,
+            &args.path,
+            &args.docker,
+            &args.docker_path,
+            &args.multi_path,
+        ) {
             (Some(package), None, None, None, None) => {
                 // Tool mode: hoist a package/executable
                 package::handle_package_mode(package, args.dry_run)?;
@@ -94,7 +100,8 @@ fn handle_template_mode(command: &TemplateCommand) -> anyhow::Result<()> {
         }
         TemplateCommand::Search { query } => {
             let templates = template::list_available_templates()?;
-            let matches: Vec<_> = templates.into_iter()
+            let matches: Vec<_> = templates
+                .into_iter()
                 .filter(|t| t.to_lowercase().contains(&query.to_lowercase()))
                 .collect();
 

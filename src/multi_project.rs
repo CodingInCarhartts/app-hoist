@@ -57,19 +57,21 @@ pub async fn handle_multi_project_mode(paths: &[String], dry_run: bool) -> anyho
         // Filter to only options that exist in all projects
         for (path, project_type, entry_point) in &project_infos[1..] {
             let project_opts = get_project_options(project_type, entry_point, path)?;
-            let project_flags: std::collections::HashSet<_> = project_opts.iter()
+            let project_flags: std::collections::HashSet<_> = project_opts
+                .iter()
                 .flat_map(|opt| opt.flags.iter())
                 .collect();
 
-            common_opts.retain(|opt| {
-                opt.flags.iter().any(|flag| project_flags.contains(flag))
-            });
+            common_opts.retain(|opt| opt.flags.iter().any(|flag| project_flags.contains(flag)));
         }
 
         common_opts
     };
 
-    println!("Found {} common operations across all projects", common_options.len());
+    println!(
+        "Found {} common operations across all projects",
+        common_options.len()
+    );
 
     let selected_options = if dry_run {
         println!("Dry run: skipping interactive selection, using no arguments.");
@@ -105,7 +107,7 @@ pub async fn handle_multi_project_mode(paths: &[String], dry_run: bool) -> anyho
             pb.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.green} [{elapsed_precise}] {msg}")
-                    .unwrap()
+                    .unwrap(),
             );
             pb.set_message(format!("Processing {}", path));
 
@@ -116,7 +118,8 @@ pub async fn handle_multi_project_mode(paths: &[String], dry_run: bool) -> anyho
                 &selected_opts,
                 dry_run_flag,
                 &pb,
-            ).await;
+            )
+            .await;
 
             match &result {
                 Ok(_) => {
@@ -172,7 +175,12 @@ async fn execute_project_operations(
     }
 
     if dry_run {
-        pb.set_message(format!("{}: Dry run - {} {}", path, executable, args.join(" ")));
+        pb.set_message(format!(
+            "{}: Dry run - {} {}",
+            path,
+            executable,
+            args.join(" ")
+        ));
         return Ok(());
     }
 
@@ -293,7 +301,7 @@ fn detect_package_manager(path: &str) -> String {
     } else if std::path::Path::new(&pnpm_lock).exists() {
         "pnpm".to_string()
     } else {
-        "npm".to_string()  // default
+        "npm".to_string() // default
     }
 }
 
@@ -371,13 +379,13 @@ fn detect_entry_point(path: &str) -> anyhow::Result<String> {
     // Check if this is a Rust project
     let cargo_toml_path = format!("{}/Cargo.toml", path);
     if std::path::Path::new(&cargo_toml_path).exists() {
-        return Ok(".".to_string());  // Run current directory for Rust
+        return Ok(".".to_string()); // Run current directory for Rust
     }
 
     // Check if this is a JavaScript/TypeScript project
     let package_json_path = format!("{}/package.json", path);
     if std::path::Path::new(&package_json_path).exists() {
-        return Ok(".".to_string());  // Run with package manager
+        return Ok(".".to_string()); // Run with package manager
     }
 
     // Python project detection

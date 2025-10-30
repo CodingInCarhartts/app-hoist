@@ -115,7 +115,12 @@ pub async fn execute_project_command_async(
         pb.set_message(format!("✅ Completed: {} {}", executable, args.join(" ")));
         Ok(())
     } else {
-        pb.set_message(format!("❌ Failed: {} {} (exit code: {:?})", executable, args.join(" "), status.code()));
+        pb.set_message(format!(
+            "❌ Failed: {} {} (exit code: {:?})",
+            executable,
+            args.join(" "),
+            status.code()
+        ));
         anyhow::bail!("Command failed with exit code: {:?}", status.code());
     }
 }

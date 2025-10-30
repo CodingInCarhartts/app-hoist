@@ -64,7 +64,10 @@ pub fn init_project_from_template(template_name: &str, target_path: &str) -> any
     // Copy and process template files
     copy_template_files(&template_dir, target_path, &variables)?;
 
-    println!("✅ Successfully initialized project from template '{}'", template_name);
+    println!(
+        "✅ Successfully initialized project from template '{}'",
+        template_name
+    );
     println!("📁 Project created at: {}", target_path);
 
     Ok(())
@@ -93,15 +96,17 @@ pub fn create_template_from_project(project_path: &str, template_name: &str) -> 
 
     save_template_config(&template_dir.join("template.toml"), &config)?;
 
-    println!("✅ Successfully created template '{}' from project", template_name);
+    println!(
+        "✅ Successfully created template '{}' from project",
+        template_name
+    );
     println!("📁 Template stored at: {}", template_dir.display());
 
     Ok(())
 }
 
 fn get_template_dir() -> anyhow::Result<PathBuf> {
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Could not find home directory"))?;
+    let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
     Ok(home_dir.join(".app-hoist").join("templates"))
 }
 
@@ -109,47 +114,57 @@ fn load_template_config(path: &Path) -> anyhow::Result<TemplateConfig> {
     let content = fs::read_to_string(path)?;
     let value: toml::Value = toml::from_str(&content)?;
 
-    let name = value.get("name")
+    let name = value
+        .get("name")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
 
-    let description = value.get("description")
+    let description = value
+        .get("description")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
 
-    let language = value.get("language")
+    let language = value
+        .get("language")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
 
-    let tags = value.get("tags")
+    let tags = value
+        .get("tags")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter()
-            .filter_map(|v| v.as_str())
-            .map(|s| s.to_string())
-            .collect()
-        )
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
         .unwrap_or_default();
 
     let variables = if let Some(vars_table) = value.get("variables").and_then(|v| v.as_table()) {
         let mut vars = HashMap::new();
         for (key, var_value) in vars_table {
             if let Some(var_table) = var_value.as_table() {
-                let var_desc = var_table.get("description")
+                let var_desc = var_table
+                    .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let var_default = var_table.get("default")
+                let var_default = var_table
+                    .get("default")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
 
-                vars.insert(key.clone(), TemplateVariable {
-                    description: var_desc,
-                    default: var_default,
-                });
+                vars.insert(
+                    key.clone(),
+                    TemplateVariable {
+                        description: var_desc,
+                        default: var_default,
+                    },
+                );
             }
         }
         vars
@@ -170,10 +185,18 @@ fn save_template_config(path: &Path, config: &TemplateConfig) -> anyhow::Result<
     let mut value = toml::value::Table::new();
 
     value.insert("name".to_string(), toml::Value::String(config.name.clone()));
-    value.insert("description".to_string(), toml::Value::String(config.description.clone()));
-    value.insert("language".to_string(), toml::Value::String(config.language.clone()));
+    value.insert(
+        "description".to_string(),
+        toml::Value::String(config.description.clone()),
+    );
+    value.insert(
+        "language".to_string(),
+        toml::Value::String(config.language.clone()),
+    );
 
-    let tags_array: Vec<toml::Value> = config.tags.iter()
+    let tags_array: Vec<toml::Value> = config
+        .tags
+        .iter()
         .map(|tag| toml::Value::String(tag.clone()))
         .collect();
     value.insert("tags".to_string(), toml::Value::Array(tags_array));
@@ -181,8 +204,14 @@ fn save_template_config(path: &Path, config: &TemplateConfig) -> anyhow::Result<
     let mut vars_table = toml::value::Table::new();
     for (key, var) in &config.variables {
         let mut var_table = toml::value::Table::new();
-        var_table.insert("description".to_string(), toml::Value::String(var.description.clone()));
-        var_table.insert("default".to_string(), toml::Value::String(var.default.clone()));
+        var_table.insert(
+            "description".to_string(),
+            toml::Value::String(var.description.clone()),
+        );
+        var_table.insert(
+            "default".to_string(),
+            toml::Value::String(var.default.clone()),
+        );
         vars_table.insert(key.clone(), toml::Value::Table(var_table));
     }
     value.insert("variables".to_string(), toml::Value::Table(vars_table));
@@ -198,7 +227,10 @@ fn collect_template_variables(config: &TemplateConfig) -> anyhow::Result<HashMap
 
     // Add built-in variables
     variables.insert("project_name".to_string(), config.name.clone());
-    variables.insert("year".to_string(), chrono::Utc::now().format("%Y").to_string());
+    variables.insert(
+        "year".to_string(),
+        chrono::Utc::now().format("%Y").to_string(),
+    );
 
     // Collect user-defined variables
     for (key, var_config) in &config.variables {
@@ -216,7 +248,11 @@ fn collect_template_variables(config: &TemplateConfig) -> anyhow::Result<HashMap
     Ok(variables)
 }
 
-fn copy_template_files(template_dir: &Path, target_path: &str, variables: &HashMap<String, String>) -> anyhow::Result<()> {
+fn copy_template_files(
+    template_dir: &Path,
+    target_path: &str,
+    variables: &HashMap<String, String>,
+) -> anyhow::Result<()> {
     let target_path = Path::new(target_path);
 
     for entry in walkdir::WalkDir::new(template_dir) {
@@ -251,7 +287,10 @@ fn copy_template_files(template_dir: &Path, target_path: &str, variables: &HashM
     Ok(())
 }
 
-fn process_template_content(content: &str, variables: &HashMap<String, String>) -> anyhow::Result<String> {
+fn process_template_content(
+    content: &str,
+    variables: &HashMap<String, String>,
+) -> anyhow::Result<String> {
     let mut result = content.to_string();
 
     // Simple variable substitution: {{variable_name}}
@@ -279,9 +318,7 @@ fn copy_project_to_template(project_path: &str, template_dir: &Path) -> anyhow::
         let path = entry.path();
 
         // Skip ignored files/directories
-        let file_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         if ignore_patterns.iter().any(|pattern| {
             if pattern.starts_with("*.") {
@@ -326,9 +363,10 @@ fn detect_project_language(project_path: &str) -> anyhow::Result<String> {
         } else {
             Ok("javascript".to_string())
         }
-    } else if project_path.join("pyproject.toml").exists() ||
-              project_path.join("setup.py").exists() ||
-              project_path.join("requirements.txt").exists() {
+    } else if project_path.join("pyproject.toml").exists()
+        || project_path.join("setup.py").exists()
+        || project_path.join("requirements.txt").exists()
+    {
         Ok("python".to_string())
     } else {
         Ok("unknown".to_string())

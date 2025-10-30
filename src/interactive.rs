@@ -5,7 +5,7 @@ use crate::multi_project;
 use crate::package;
 use crate::project;
 use crate::template;
-use inquire::{Select, Text, Confirm};
+use inquire::{Confirm, Select, Text};
 
 #[derive(Debug, Clone)]
 enum MainMenuChoice {
@@ -22,12 +22,25 @@ enum MainMenuChoice {
 impl std::fmt::Display for MainMenuChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MainMenuChoice::PackageManagement => write!(f, "📦 Package Management - Hoist executables/packages"),
-            MainMenuChoice::ProjectManagement => write!(f, "🏗️  Project Management - Manage development projects"),
-            MainMenuChoice::DockerOperations => write!(f, "🐳 Docker Operations - Container management"),
-            MainMenuChoice::MultiProjectOperations => write!(f, "🔄 Multi-Project Operations - Parallel project management"),
-            MainMenuChoice::TemplateOperations => write!(f, "📋 Template Operations - Project scaffolding"),
-            MainMenuChoice::CacheOperations => write!(f, "💾 Cache Operations - Manage cached data"),
+            MainMenuChoice::PackageManagement => {
+                write!(f, "📦 Package Management - Hoist executables/packages")
+            }
+            MainMenuChoice::ProjectManagement => {
+                write!(f, "🏗️  Project Management - Manage development projects")
+            }
+            MainMenuChoice::DockerOperations => {
+                write!(f, "🐳 Docker Operations - Container management")
+            }
+            MainMenuChoice::MultiProjectOperations => write!(
+                f,
+                "🔄 Multi-Project Operations - Parallel project management"
+            ),
+            MainMenuChoice::TemplateOperations => {
+                write!(f, "📋 Template Operations - Project scaffolding")
+            }
+            MainMenuChoice::CacheOperations => {
+                write!(f, "💾 Cache Operations - Manage cached data")
+            }
             MainMenuChoice::Help => write!(f, "❓ Help/About - Information and help"),
             MainMenuChoice::Exit => write!(f, "🚪 Exit - Quit app-hoist"),
         }
@@ -99,8 +112,7 @@ async fn handle_package_management() -> anyhow::Result<()> {
     println!("📦 Package Management");
     println!("Hoist executables and packages to make them available system-wide.\n");
 
-    let package_name = Text::new("Enter the name of the package/executable to hoist:")
-        .prompt()?;
+    let package_name = Text::new("Enter the name of the package/executable to hoist:").prompt()?;
 
     let dry_run = Confirm::new("Dry run? (Show what would be done without executing)")
         .with_default(false)
@@ -140,19 +152,23 @@ async fn handle_project_management() -> anyhow::Result<()> {
             if use_current {
                 project::handle_project_mode(&current_path, false)?;
             } else {
-                let path = Text::new("Enter project path:")
+                let path_input = Text::new("Enter project path:")
                     .with_default(".")
                     .prompt()?;
+                let path = expand_tilde(&path_input)?;
                 project::handle_project_mode(&path, false)?;
             }
         }
         None => {
             println!("❌ No project detected in current directory");
-            println!("💡 Supported project types: Rust (Cargo.toml), Go (go.mod), Python (pyproject.toml/uv), JavaScript/TypeScript (package.json)");
+            println!(
+                "💡 Supported project types: Rust (Cargo.toml), Go (go.mod), Python (pyproject.toml/uv), JavaScript/TypeScript (package.json)"
+            );
 
-            let path = Text::new("Enter project path:")
+            let path_input = Text::new("Enter project path:")
                 .with_default(".")
                 .prompt()?;
+            let path = expand_tilde(&path_input)?;
             project::handle_project_mode(&path, false)?;
         }
     }
@@ -164,32 +180,27 @@ async fn handle_docker_operations() -> anyhow::Result<()> {
     println!("🐳 Docker Operations");
     println!("Choose between direct Docker commands or managing Docker-enabled projects.\n");
 
-    let docker_choices = vec![
-        "Direct Docker Commands",
-        "Docker Project Management",
-    ];
+    let docker_choices = vec!["Direct Docker Commands", "Docker Project Management"];
 
     let selection = Select::new("Select Docker operation type:", docker_choices).prompt()?;
 
     match selection {
         "Direct Docker Commands" => {
-            let command = Text::new("Enter Docker command (e.g., 'ps -a', 'images', 'system prune'):")
-                .prompt()?;
+            let command =
+                Text::new("Enter Docker command (e.g., 'ps -a', 'images', 'system prune'):")
+                    .prompt()?;
 
-            let dry_run = Confirm::new("Dry run?")
-                .with_default(false)
-                .prompt()?;
+            let dry_run = Confirm::new("Dry run?").with_default(false).prompt()?;
 
             docker::handle_direct_docker_mode(&command, dry_run)?;
         }
         "Docker Project Management" => {
-            let path = Text::new("Enter path to Docker-enabled project:")
+            let path_input = Text::new("Enter path to Docker-enabled project:")
                 .with_default(".")
                 .prompt()?;
+            let path = expand_tilde(&path_input)?;
 
-            let dry_run = Confirm::new("Dry run?")
-                .with_default(false)
-                .prompt()?;
+            let dry_run = Confirm::new("Dry run?").with_default(false).prompt()?;
 
             docker::handle_docker_project_mode(&path, dry_run)?;
         }
@@ -207,12 +218,17 @@ async fn handle_multi_project_operations() -> anyhow::Result<()> {
 
     println!("Enter project paths (one per line, leave empty to finish):");
     loop {
-        let path = Text::new(&format!("Project path {} (leave empty to finish):", paths.len() + 1))
-            .prompt()?;
+        let path_input = Text::new(&format!(
+            "Project path {} (leave empty to finish):",
+            paths.len() + 1
+        ))
+        .prompt()?;
 
-        if path.trim().is_empty() {
+        if path_input.trim().is_empty() {
             break;
         }
+
+        let path = expand_tilde(&path_input)?;
 
         // Validate path exists
         if !std::path::Path::new(&path).exists() {
@@ -238,7 +254,10 @@ async fn handle_multi_project_operations() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!("📂 Selected {} projects for parallel operations:", paths.len());
+    println!(
+        "📂 Selected {} projects for parallel operations:",
+        paths.len()
+    );
     for (i, path) in paths.iter().enumerate() {
         println!("  {}. {}", i + 1, path);
     }
@@ -271,30 +290,29 @@ fn handle_template_operations() -> anyhow::Result<()> {
             handle_template_mode(&cmd)?;
         }
         "Initialize Project from Template" => {
-            let template = Text::new("Enter template name:")
-                .prompt()?;
+            let template = Text::new("Enter template name:").prompt()?;
 
-            let target = Text::new("Enter target directory:")
+            let target_input = Text::new("Enter target directory:")
                 .with_default(".")
                 .prompt()?;
+            let target = expand_tilde(&target_input)?;
 
             let cmd = TemplateCommand::Init { template, target };
             handle_template_mode(&cmd)?;
         }
         "Create Template from Project" => {
-            let name = Text::new("Enter template name:")
-                .prompt()?;
+            let name = Text::new("Enter template name:").prompt()?;
 
-            let source = Text::new("Enter source project path:")
+            let source_input = Text::new("Enter source project path:")
                 .with_default(".")
                 .prompt()?;
+            let source = expand_tilde(&source_input)?;
 
             let cmd = TemplateCommand::Create { name, source };
             handle_template_mode(&cmd)?;
         }
         "Search Templates" => {
-            let query = Text::new("Enter search query:")
-                .prompt()?;
+            let query = Text::new("Enter search query:").prompt()?;
 
             let cmd = TemplateCommand::Search { query };
             handle_template_mode(&cmd)?;
@@ -335,8 +353,8 @@ fn handle_cache_operations() -> anyhow::Result<()> {
             }
         }
         "Invalidate Specific Path" => {
-            let path = Text::new("Enter path to invalidate:")
-                .prompt()?;
+            let path_input = Text::new("Enter path to invalidate:").prompt()?;
+            let path = expand_tilde(&path_input)?;
 
             let cmd = CacheCommand::Invalidate { path };
             handle_cache_mode(&cmd)?;
@@ -375,9 +393,16 @@ fn get_available_operations(project_type: &ProjectType) -> Vec<String> {
     match project_type {
         ProjectType::Rust => vec!["run", "build", "test", "check", "clippy", "install"],
         ProjectType::Go => vec!["run", "build", "test", "tidy", "get"],
-        ProjectType::Uv | ProjectType::Venv | ProjectType::Generic => vec!["run", "sync/add/remove"],
-        ProjectType::JavaScript | ProjectType::TypeScript => vec!["run", "install", "add", "test", "build"],
-    }.into_iter().map(|s| s.to_string()).collect()
+        ProjectType::Uv | ProjectType::Venv | ProjectType::Generic => {
+            vec!["run", "sync/add/remove"]
+        }
+        ProjectType::JavaScript | ProjectType::TypeScript => {
+            vec!["run", "install", "add", "test", "build"]
+        }
+    }
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 fn detect_project_in_current_dir() -> anyhow::Result<Option<ProjectType>> {
@@ -459,7 +484,8 @@ fn handle_template_mode(command: &TemplateCommand) -> anyhow::Result<()> {
         }
         TemplateCommand::Search { query } => {
             let templates = template::list_available_templates()?;
-            let matches: Vec<_> = templates.into_iter()
+            let matches: Vec<_> = templates
+                .into_iter()
                 .filter(|t| t.to_lowercase().contains(&query.to_lowercase()))
                 .collect();
 
@@ -495,4 +521,14 @@ fn handle_cache_mode(command: &CacheCommand) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn expand_tilde(path: &str) -> anyhow::Result<String> {
+    if path.starts_with("~") {
+        let home = std::env::var("HOME")
+            .map_err(|_| anyhow::anyhow!("HOME environment variable not set"))?;
+        Ok(path.replacen("~", &home, 1))
+    } else {
+        Ok(path.to_string())
+    }
 }

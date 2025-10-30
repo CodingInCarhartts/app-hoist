@@ -149,8 +149,8 @@ impl CacheManager {
     }
 
     fn get_cache_dir() -> anyhow::Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
         Ok(home_dir.join(".app-hoist").join("cache"))
     }
 
