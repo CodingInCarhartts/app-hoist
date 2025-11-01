@@ -19,23 +19,21 @@ pub fn select_options(options: &[OptionInfo]) -> anyhow::Result<Vec<(String, Opt
 
     for text in selected_texts {
         // Extract the index from [idx]
-        if let Some(start) = text.find('[') {
-            if let Some(end) = text.find(']') {
-                if let Ok(idx) = text[start + 1..end].parse::<usize>() {
-                    if let Some(opt) = options.get(idx) {
-                        let flag = opt.flags[0].clone(); // Use the first flag
+        if let Some(start) = text.find('[')
+            && let Some(end) = text.find(']')
+            && let Ok(idx) = text[start + 1..end].parse::<usize>()
+            && let Some(opt) = options.get(idx)
+        {
+            let flag = opt.flags[0].clone(); // Use the first flag
 
-                        let value = if opt.requires_value {
-                            // Ask for value
-                            Some(Text::new(&format!("Enter value for {}:", flag)).prompt()?)
-                        } else {
-                            None
-                        };
+            let value = if opt.requires_value {
+                // Ask for value
+                Some(Text::new(&format!("Enter value for {}:", flag)).prompt()?)
+            } else {
+                None
+            };
 
-                        selected.push((flag, value));
-                    }
-                }
-            }
+            selected.push((flag, value));
         }
     }
 

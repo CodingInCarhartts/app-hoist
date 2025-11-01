@@ -156,11 +156,7 @@ impl CacheManager {
 
     fn get_cache_file_path(&self, path: &str) -> PathBuf {
         // Create a safe filename from the path
-        let safe_name = path
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace(':', "_")
-            .replace(' ', "_");
+        let safe_name = path.replace(['/', '\\', ':', ' '], "_");
 
         self.cache_dir.join(format!("{}.json", safe_name))
     }

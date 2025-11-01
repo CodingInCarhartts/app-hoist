@@ -6,6 +6,7 @@ pub struct OptionInfo {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CliArg {
     pub name: String,
     pub long: Option<String>,

@@ -27,10 +27,10 @@ pub fn list_available_templates() -> anyhow::Result<Vec<String>> {
     let mut templates = vec![];
     for entry in fs::read_dir(template_dir)? {
         let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            if let Some(name) = entry.file_name().to_str() {
-                templates.push(name.to_string());
-            }
+        if entry.file_type()?.is_dir()
+            && let Some(name) = entry.file_name().to_str()
+        {
+            templates.push(name.to_string());
         }
     }
 

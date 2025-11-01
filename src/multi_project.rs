@@ -271,11 +271,8 @@ fn build_project_command(
         ProjectType::Uv => {
             let mut args = vec!["--project".to_string(), path.to_string()];
             for (flag, _) in selected {
-                match flag.as_str() {
-                    "sync" => {
-                        args.push("sync".to_string());
-                    }
-                    _ => {}
+                if flag.as_str() == "sync" {
+                    args.push("sync".to_string());
                 }
             }
             if args.len() > 2 {

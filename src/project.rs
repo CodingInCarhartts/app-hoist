@@ -434,8 +434,7 @@ fn build_project_command(
                         args.push("clippy".to_string());
                     }
                     _ => {
-                        if flag.starts_with("run --") {
-                            let arg_name = &flag[6..];
+                        if let Some(arg_name) = flag.strip_prefix("run --") {
                             args.push("run".to_string());
                             args.push("--bin".to_string());
                             args.push(detect_rust_binary_name(path)?);
