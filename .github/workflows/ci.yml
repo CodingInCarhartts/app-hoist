@@ -26,8 +26,8 @@ jobs:
         toolchain: ${{ matrix.rust }}
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
-    - name: Install clippy (nightly)
-      if: matrix.rust == 'nightly'
+    - name: Install clippy (beta/nightly)
+      if: matrix.rust != 'stable'
       run: rustup component add clippy
     - name: Check
       run: cargo check
